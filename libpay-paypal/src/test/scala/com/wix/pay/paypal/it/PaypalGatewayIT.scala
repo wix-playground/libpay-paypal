@@ -4,11 +4,10 @@ package com.wix.pay.paypal.it
 import com.wix.pay.creditcard.{CreditCard, CreditCardOptionalFields, YearMonth}
 import com.wix.pay.model.CurrencyAmount
 import com.wix.pay.paypal._
-import com.wix.pay.paypal.testkit.{PaypalDriver, PaypalError}
+import com.wix.pay.paypal.testkit.PaypalDriver
 import com.wix.pay.{PaymentErrorException, PaymentGateway, PaymentRejectedException}
 import org.specs2.mutable.SpecWithJUnit
 import org.specs2.specification.Scope
-import spray.http.StatusCodes
 
 
 class PaypalGatewayIT extends SpecWithJUnit {
@@ -50,15 +49,65 @@ class PaypalGatewayIT extends SpecWithJUnit {
   }
 
   "sale request via PayPal gateway" should {
+    "gracefully fail on invalid merchant key" in new Ctx {
+      driver.anAuthenticateRequestFor(someMerchant.clientId, someMerchant.secret) failsOnWrongCredentials()
+
+      paypal.sale(
+        merchantKey = someMerchantKey,
+        creditCard = someCreditCard,
+        currencyAmount = someCurrencyAmount
+      ) must beAFailedTry(
+        check = beAnInstanceOf[PaymentErrorException]
+      )
+    }
+
+    "successfully yield a transaction ID on valid request" in new Ctx {
+      val someTransactionId = "some transaction ID"
+
+      driver.anAuthenticateRequestFor(someMerchant.clientId, someMerchant.secret) returns someAccessToken
+      driver.aSaleRequestFor(
+        accessToken = someAccessToken,
+        currencyAmount = someCurrencyAmount,
+        card = someCreditCard
+      ) returns someTransactionId
+
+      paypal.sale(
+        merchantKey = someMerchantKey,
+        creditCard = someCreditCard,
+        currencyAmount = someCurrencyAmount
+      ) must beASuccessfulTry(
+        check = ===(someTransactionId)
+      )
+    }
+
     "gracefully fail on rejected card" in new Ctx {
       driver.anAuthenticateRequestFor(
         someMerchant.clientId, someMerchant.secret
       ) returns someAccessToken
       driver.aSaleRequestFor(
-        someAccessToken, someCurrencyAmount, someCreditCard
-      ) errors(
-        StatusCodes.BadRequest, PaypalError("CREDIT_CARD_REFUSED", "Credit card was refused")
+        accessToken = someAccessToken,
+        currencyAmount = someCurrencyAmount,
+        card = someCreditCard
+      ) isRefused()
+
+      paypal.sale(
+        merchantKey = someMerchantKey,
+        creditCard = someCreditCard,
+        currencyAmount = someCurrencyAmount
+      ) must beAFailedTry(
+        check = beAnInstanceOf[PaymentRejectedException]
       )
+    }
+
+    "gracefully fail on CSC error" in new Ctx {
+      driver.anAuthenticateRequestFor(
+        someMerchant.clientId, someMerchant.secret
+      ) returns someAccessToken
+      driver.aSaleRequestFor(
+        accessToken = someAccessToken,
+        currencyAmount = someCurrencyAmount,
+        card = someCreditCard
+      ) failsCscCheck()
 
       paypal.sale(
         merchantKey = someMerchantKey,
@@ -70,11 +119,9 @@ class PaypalGatewayIT extends SpecWithJUnit {
     }
   }
 
-
   "authorize request via PayPal gateway" should {
     "gracefully fail on invalid merchant key" in new Ctx {
-      driver.anAuthenticateRequestFor(someMerchant.clientId, someMerchant.secret) errors(
-        StatusCodes.Unauthorized, PaypalError("invalid_client", "Invalid client credentials"))
+      driver.anAuthenticateRequestFor(someMerchant.clientId, someMerchant.secret) failsOnWrongCredentials()
 
       paypal.authorize(
         merchantKey = someMerchantKey,
@@ -104,8 +151,30 @@ class PaypalGatewayIT extends SpecWithJUnit {
 
     "gracefully fail on rejected card" in new Ctx {
       driver.anAuthenticateRequestFor(someMerchant.clientId, someMerchant.secret) returns someAccessToken
-      driver.anAuthorizeRequestFor(someAccessToken, someCurrencyAmount, someCreditCard) errors(
-        StatusCodes.BadRequest, PaypalError("CREDIT_CARD_REFUSED", "Credit card was refused"))
+      driver.anAuthorizeRequestFor(
+        accessToken = someAccessToken,
+        currencyAmount = someCurrencyAmount,
+        card = someCreditCard
+      ) isRefused()
+
+      paypal.authorize(
+        merchantKey = someMerchantKey,
+        creditCard = someCreditCard,
+        currencyAmount = someCurrencyAmount
+      ) must beAFailedTry(
+        check = beAnInstanceOf[PaymentRejectedException]
+      )
+    }
+
+    "gracefully fail on CSC error" in new Ctx {
+      driver.anAuthenticateRequestFor(
+        someMerchant.clientId, someMerchant.secret
+      ) returns someAccessToken
+      driver.anAuthorizeRequestFor(
+        accessToken = someAccessToken,
+        currencyAmount = someCurrencyAmount,
+        card = someCreditCard
+      ) failsCscCheck()
 
       paypal.authorize(
         merchantKey = someMerchantKey,

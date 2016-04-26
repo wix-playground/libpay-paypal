@@ -5,6 +5,7 @@ import com.paypal.api.payments.Transaction
 import com.paypal.base.rest.PayPalRESTException
 import com.wix.pay.creditcard.CreditCard
 import com.wix.pay.model.{CurrencyAmount, Customer, Deal}
+import com.wix.pay.paypal.model.ErrorNames
 import com.wix.pay.{PaymentErrorException, PaymentException, PaymentGateway, PaymentRejectedException}
 
 import scala.collection.JavaConversions._
@@ -97,7 +98,7 @@ class PaypalGateway(helper: PaypalGatewayHelper = new DefaultPaypalGatewayHelper
 
     Option(e.getDetails) match {
       case Some(error) => error.getName match {
-        case "CREDIT_CARD_REFUSED" => new PaymentRejectedException(e.getMessage, e)
+        case ErrorNames.creditCardRefused|ErrorNames.creditCardCvvCheckFailed => new PaymentRejectedException(e.getMessage, e)
         case _ => new PaymentErrorException(e.getMessage, e)
       }
       case None => new PaymentErrorException(e.getMessage, e)
