@@ -29,7 +29,7 @@ class PaypalGateway(helper: PaypalGatewayHelper = new DefaultPaypalGatewayHelper
     } match {
       case Success(authorizationKey) => Success(authorizationKey)
       case Failure(e: PayPalRESTException) => Failure(translatePaypalException(e))
-      case Failure(e) => Failure(new PaymentErrorException(e.getMessage, e))
+      case Failure(e) => Failure(PaymentErrorException(e.getMessage, e))
     }
   }
 
@@ -46,7 +46,7 @@ class PaypalGateway(helper: PaypalGatewayHelper = new DefaultPaypalGatewayHelper
     } match {
       case Success(transactionId) => Success(transactionId)
       case Failure(e: PayPalRESTException) => Failure(translatePaypalException(e))
-      case Failure(e) => Failure(new PaymentErrorException(e.getMessage, e))
+      case Failure(e) => Failure(PaymentErrorException(e.getMessage, e))
     }
   }
 
@@ -62,7 +62,7 @@ class PaypalGateway(helper: PaypalGatewayHelper = new DefaultPaypalGatewayHelper
     } match {
       case Success(transactionId) => Success(transactionId)
       case Failure(e: PayPalRESTException) => Failure(translatePaypalException(e))
-      case Failure(e) => Failure(new PaymentErrorException(e.getMessage, e))
+      case Failure(e) => Failure(PaymentErrorException(e.getMessage, e))
     }
   }
 
@@ -78,7 +78,7 @@ class PaypalGateway(helper: PaypalGatewayHelper = new DefaultPaypalGatewayHelper
     } match {
       case Success(transactionId) => Success(transactionId)
       case Failure(e: PayPalRESTException) => Failure(translatePaypalException(e))
-      case Failure(e) => Failure(new PaymentErrorException(e.getMessage, e))
+      case Failure(e) => Failure(PaymentErrorException(e.getMessage, e))
     }
   }
 
@@ -87,7 +87,7 @@ class PaypalGateway(helper: PaypalGatewayHelper = new DefaultPaypalGatewayHelper
       Option(resource.getAuthorization).isDefined
     } match {
       case Some(authorizationResource) => authorizationResource.getAuthorization.getId
-      case None => throw new PaymentException("Invalid authorization ID")
+      case None => throw PaymentException("Invalid authorization ID")
     }
   }
 
@@ -98,10 +98,10 @@ class PaypalGateway(helper: PaypalGatewayHelper = new DefaultPaypalGatewayHelper
 
     Option(e.getDetails) match {
       case Some(error) => error.getName match {
-        case ErrorNames.creditCardRefused|ErrorNames.creditCardCvvCheckFailed => new PaymentRejectedException(e.getMessage, e)
-        case _ => new PaymentErrorException(e.getMessage, e)
+        case ErrorNames.creditCardRefused|ErrorNames.creditCardCvvCheckFailed => PaymentRejectedException(e.getMessage, e)
+        case _ => PaymentErrorException(e.getMessage, e)
       }
-      case None => new PaymentErrorException(e.getMessage, e)
+      case None => PaymentErrorException(e.getMessage, e)
     }
   }
 }

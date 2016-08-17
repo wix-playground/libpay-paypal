@@ -64,13 +64,13 @@ class DefaultPaypalGatewayHelper(connectTimeout: Option[Duration] = None,
 
           (error.getError, error.getErrorDescription) match {
             case ("invalid_client", "Client Authentication failed") =>
-              new PaymentErrorException("PayPal Incorrect Client (merchant) Credentials", e)
+              PaymentErrorException("PayPal Incorrect Client (merchant) Credentials", e)
 
             case _ =>
-              new PaymentErrorException(e.getMessage, e)
+              PaymentErrorException(e.getMessage, e)
           }
 
-        case _ => new PaymentErrorException(e.getMessage, e)
+        case _ => PaymentErrorException(e.getMessage, e)
       }
     }
 
@@ -145,7 +145,7 @@ class DefaultPaypalGatewayHelper(connectTimeout: Option[Duration] = None,
 
     Networks(creditCard.number) match {
       case None =>
-        throw new PaymentException(s"Invalid credit card network: (${creditCard.number.substring(0, 6)}, ${creditCard.number.length})")
+        throw PaymentException(s"Invalid credit card network: (${creditCard.number.substring(0, 6)}, ${creditCard.number.length})")
       case Some(network) => ppCard.setType(toPaypalCardType(network))
     }
 
@@ -178,7 +178,7 @@ class DefaultPaypalGatewayHelper(connectTimeout: Option[Duration] = None,
       case Networks.masterCard => "mastercard"
       case Networks.discover => "discover"
       case Networks.amex => "amex"
-      case _ => throw new PaymentException("Unsupported credit card type: " + cardType);
+      case _ => throw PaymentException("Unsupported credit card type: " + cardType);
     }
   }
 
