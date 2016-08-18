@@ -5,16 +5,29 @@ import com.paypal.api.payments.Transaction
 import com.paypal.base.rest.PayPalRESTException
 import com.wix.pay.creditcard.CreditCard
 import com.wix.pay.model.{CurrencyAmount, Customer, Deal}
-import com.wix.pay.paypal.model.ErrorNames
-import com.wix.pay.{PaymentErrorException, PaymentException, PaymentGateway, PaymentRejectedException}
+import com.wix.pay.{PaymentErrorException, PaymentException, PaymentGateway}
 
 import scala.collection.JavaConversions._
 import scala.util.{Failure, Success, Try}
 
+
+/**
+  * @param rejectOnUnknownErrors   If true, unknown errors are treated as payment rejection.
+  *                                Otherwise, they are treated as general payment errors.
+  *
+  * @note When a card number is flagged by PayPal's fraud detection mechanism, transactions that use it may start
+  *       failing on "unknown errors". For example, this is the case for the test card 4111111111111111.
+  *       To workaround this, set rejectOnUnknownErrors to true.
+  * @see <a href="https://www.paypal-knowledge.com/infocenter/index?page=content&id=FAQ1041">What is API error code 10001?</a>
+  */
 class PaypalGateway(helper: PaypalGatewayHelper = new DefaultPaypalGatewayHelper,
                     merchantParser: PaypalMerchantParser = new JsonPaypalMerchantParser,
                     authorizationParser: PaypalAuthorizationParser = new JsonPaypalAuthorizationParser,
-                    bnCode: Option[String] = None) extends PaymentGateway {
+                    bnCode: Option[String] = None,
+                    rejectOnUnknownErrors: Boolean = false) extends PaymentGateway {
+  private val exceptionsTranslator = new ExceptionsTranslator(
+    rejectOnUnknownErrors = rejectOnUnknownErrors
+  )
 
   override def authorize(merchantKey: String, creditCard: CreditCard, currencyAmount: CurrencyAmount, customer: Option[Customer], deal: Option[Deal]): Try[String] = {
     Try {
@@ -28,7 +41,7 @@ class PaypalGateway(helper: PaypalGatewayHelper = new DefaultPaypalGatewayHelper
       authorizationParser.stringify(PaypalAuthorization(authorizationId, currencyAmount.currency))
     } match {
       case Success(authorizationKey) => Success(authorizationKey)
-      case Failure(e: PayPalRESTException) => Failure(translatePaypalException(e))
+      case Failure(e: PayPalRESTException) => Failure(exceptionsTranslator.translatePaypalException(e))
       case Failure(e) => Failure(PaymentErrorException(e.getMessage, e))
     }
   }
@@ -45,7 +58,7 @@ class PaypalGateway(helper: PaypalGatewayHelper = new DefaultPaypalGatewayHelper
       captured.getId
     } match {
       case Success(transactionId) => Success(transactionId)
-      case Failure(e: PayPalRESTException) => Failure(translatePaypalException(e))
+      case Failure(e: PayPalRESTException) => Failure(exceptionsTranslator.translatePaypalException(e))
       case Failure(e) => Failure(PaymentErrorException(e.getMessage, e))
     }
   }
@@ -61,7 +74,7 @@ class PaypalGateway(helper: PaypalGatewayHelper = new DefaultPaypalGatewayHelper
       sold.getId
     } match {
       case Success(transactionId) => Success(transactionId)
-      case Failure(e: PayPalRESTException) => Failure(translatePaypalException(e))
+      case Failure(e: PayPalRESTException) => Failure(exceptionsTranslator.translatePaypalException(e))
       case Failure(e) => Failure(PaymentErrorException(e.getMessage, e))
     }
   }
@@ -77,7 +90,7 @@ class PaypalGateway(helper: PaypalGatewayHelper = new DefaultPaypalGatewayHelper
       ppAuthorization.getId
     } match {
       case Success(transactionId) => Success(transactionId)
-      case Failure(e: PayPalRESTException) => Failure(translatePaypalException(e))
+      case Failure(e: PayPalRESTException) => Failure(exceptionsTranslator.translatePaypalException(e))
       case Failure(e) => Failure(PaymentErrorException(e.getMessage, e))
     }
   }
@@ -88,20 +101,6 @@ class PaypalGateway(helper: PaypalGatewayHelper = new DefaultPaypalGatewayHelper
     } match {
       case Some(authorizationResource) => authorizationResource.getAuthorization.getId
       case None => throw PaymentException("Invalid authorization ID")
-    }
-  }
-
-  def translatePaypalException(e: PayPalRESTException): PaymentException = {
-    implicit class Regex(sc: StringContext) {
-      def r = new util.matching.Regex(sc.parts.mkString, sc.parts.tail.map(_ => "x"): _*)
-    }
-
-    Option(e.getDetails) match {
-      case Some(error) => error.getName match {
-        case ErrorNames.creditCardRefused|ErrorNames.creditCardCvvCheckFailed => PaymentRejectedException(e.getMessage, e)
-        case _ => PaymentErrorException(e.getMessage, e)
-      }
-      case None => PaymentErrorException(e.getMessage, e)
     }
   }
 }
