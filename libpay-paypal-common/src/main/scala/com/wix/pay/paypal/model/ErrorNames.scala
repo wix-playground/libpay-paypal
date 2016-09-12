@@ -5,4 +5,5 @@ object ErrorNames {
   val creditCardRefused = "CREDIT_CARD_REFUSED"
   val creditCardCvvCheckFailed = "CREDIT_CARD_CVV_CHECK_FAILED"
   val unknownError = "UNKNOWN_ERROR"
+  val instrumentDeclined = "INSTRUMENT_DECLINED"
 }

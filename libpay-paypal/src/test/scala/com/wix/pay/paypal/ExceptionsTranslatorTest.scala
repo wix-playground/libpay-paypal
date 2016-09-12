@@ -49,6 +49,12 @@ class ExceptionsTranslatorTest extends SpecWithJUnit {
       ) must beAnInstanceOf[PaymentRejectedException]
     }
 
+    "translate instrument declined failures to payment rejection" in new Ctx {
+      translator.translatePaypalException(
+        e = createPaypalException(ErrorNames.instrumentDeclined)
+      ) must beAnInstanceOf[PaymentRejectedException]
+    }
+
     "translate other errors to general payment errors" in new Ctx {
       translator.translatePaypalException(
         e = createPaypalException("some-unknown-error")
