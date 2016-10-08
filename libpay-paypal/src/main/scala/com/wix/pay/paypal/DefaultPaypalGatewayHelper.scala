@@ -57,9 +57,8 @@ class DefaultPaypalGatewayHelper(connectTimeout: Option[Duration] = None,
       implicit class Regex(sc: StringContext) {
         def r = new util.matching.Regex(sc.parts.mkString, sc.parts.tail.map(_ => "x"): _*)
       }
-
       e.getMessage match {
-        case r"Error code : (\d+)$statusCode with response : (\{.*\})$json" if statusCode == "401" =>
+        case r"Response code: (\d+)$statusCode\tError response: (\{.*\})$json" if statusCode == "401" =>
           val error = parseErrorJson(json)
 
           (error.getError, error.getErrorDescription) match {
