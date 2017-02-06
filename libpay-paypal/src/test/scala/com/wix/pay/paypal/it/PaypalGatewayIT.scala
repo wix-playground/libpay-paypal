@@ -2,7 +2,7 @@ package com.wix.pay.paypal.it
 
 
 import com.wix.pay.creditcard.{CreditCard, CreditCardOptionalFields, YearMonth}
-import com.wix.pay.model.CurrencyAmount
+import com.wix.pay.model.{CurrencyAmount, Payment}
 import com.wix.pay.paypal._
 import com.wix.pay.paypal.testkit.PaypalDriver
 import com.wix.pay.{PaymentErrorException, PaymentGateway, PaymentRejectedException}
@@ -22,6 +22,7 @@ class PaypalGatewayIT extends SpecWithJUnit {
   val someMerchant = new PaypalMerchant("some client ID", "some secret")
   val someMerchantKey = merchantParser.stringify(someMerchant)
   val someCurrencyAmount = CurrencyAmount("USD", 33.3)
+  val somePayment = Payment(someCurrencyAmount, 1)
   val someCreditCard = CreditCard(
     "4012888818888",
     YearMonth(2020, 12),
@@ -55,7 +56,7 @@ class PaypalGatewayIT extends SpecWithJUnit {
       paypal.sale(
         merchantKey = someMerchantKey,
         creditCard = someCreditCard,
-        currencyAmount = someCurrencyAmount
+        payment = somePayment
       ) must beAFailedTry(
         check = beAnInstanceOf[PaymentErrorException]
       )
@@ -74,7 +75,7 @@ class PaypalGatewayIT extends SpecWithJUnit {
       paypal.sale(
         merchantKey = someMerchantKey,
         creditCard = someCreditCard,
-        currencyAmount = someCurrencyAmount
+        payment = somePayment
       ) must beASuccessfulTry(
         check = ===(someTransactionId)
       )
@@ -93,7 +94,7 @@ class PaypalGatewayIT extends SpecWithJUnit {
       paypal.sale(
         merchantKey = someMerchantKey,
         creditCard = someCreditCard,
-        currencyAmount = someCurrencyAmount
+        payment = somePayment
       ) must beAFailedTry(
         check = beAnInstanceOf[PaymentRejectedException]
       )
@@ -112,7 +113,7 @@ class PaypalGatewayIT extends SpecWithJUnit {
       paypal.sale(
         merchantKey = someMerchantKey,
         creditCard = someCreditCard,
-        currencyAmount = someCurrencyAmount
+        payment = somePayment
       ) must beAFailedTry(
         check = beAnInstanceOf[PaymentRejectedException]
       )
@@ -126,7 +127,7 @@ class PaypalGatewayIT extends SpecWithJUnit {
       paypal.authorize(
         merchantKey = someMerchantKey,
         creditCard = someCreditCard,
-        currencyAmount = someCurrencyAmount
+        payment = somePayment
       ) must beAFailedTry(
         check = beAnInstanceOf[PaymentErrorException]
       )
@@ -143,7 +144,7 @@ class PaypalGatewayIT extends SpecWithJUnit {
       paypal.authorize(
         merchantKey = someMerchantKey,
         creditCard = someCreditCard,
-        currencyAmount = someCurrencyAmount
+        payment = somePayment
       ) must beASuccessfulTry(
         check = ===(someAuthorizationKey)
       )
@@ -160,7 +161,7 @@ class PaypalGatewayIT extends SpecWithJUnit {
       paypal.authorize(
         merchantKey = someMerchantKey,
         creditCard = someCreditCard,
-        currencyAmount = someCurrencyAmount
+        payment = somePayment
       ) must beAFailedTry(
         check = beAnInstanceOf[PaymentRejectedException]
       )
@@ -179,7 +180,7 @@ class PaypalGatewayIT extends SpecWithJUnit {
       paypal.authorize(
         merchantKey = someMerchantKey,
         creditCard = someCreditCard,
-        currencyAmount = someCurrencyAmount
+        payment = somePayment
       ) must beAFailedTry(
         check = beAnInstanceOf[PaymentRejectedException]
       )

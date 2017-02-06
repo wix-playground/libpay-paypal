@@ -5,7 +5,7 @@ import java.util.Collections
 
 import com.paypal.api.payments._
 import com.wix.pay.creditcard.{CreditCard, CreditCardOptionalFields, YearMonth}
-import com.wix.pay.model.CurrencyAmount
+import com.wix.pay.model.{CurrencyAmount, Payment}
 import org.specs2.matcher._
 import org.specs2.mock.Mockito
 import org.specs2.mutable.SpecWithJUnit
@@ -34,6 +34,7 @@ class PaypalGatewayTest extends SpecWithJUnit with Mockito {
     val someMerchant = PaypalMerchant("some client ID", "some secret")
     val someMerchantKey = merchantParser.stringify(someMerchant)
     val someCurrencyAmount = CurrencyAmount("USD", 33.3)
+    val somePaymentLibpay = Payment(someCurrencyAmount, 1)
     val someCreditCard = CreditCard(
       "4012888818888",
       YearMonth(2016, 12),
@@ -41,14 +42,14 @@ class PaypalGatewayTest extends SpecWithJUnit with Mockito {
         csc = Some("123"),
         holderId = Some("some holder id"),
         holderName = Some("some holder name"))))
-    val somePayment = new Payment(null, null)
+    val somePayment = new com.paypal.api.payments.Payment(null, null)
     val someCapture = new Capture()
     val someAccessToken = "some access token"
 
     val someAuthorizationId = "some authorization ID"
     val someAuthorizationKey = authorizationParser.stringify(PaypalAuthorization(someAuthorizationId, someCurrencyAmount.currency))
 
-    val someAuthorizedPayment = new Payment()
+    val someAuthorizedPayment = new com.paypal.api.payments.Payment()
     val someAuthorizedPaymentTransaction = new Transaction()
     val someAuthorizedPaymentTransactionRelatedResources = new RelatedResources()
     val someAuthorizedPaymentTransactionRelatedResourcesAuthorization = new Authorization()
@@ -58,7 +59,7 @@ class PaypalGatewayTest extends SpecWithJUnit with Mockito {
     someAuthorizedPayment.setTransactions(Collections.singletonList(someAuthorizedPaymentTransaction))
 
     val someSoldId = "some sold ID"
-    val someSoldPayment = new Payment()
+    val someSoldPayment = new com.paypal.api.payments.Payment()
     someSoldPayment.setId(someSoldId)
 
     val someVoidedAuthorizationId = "some voided authorization ID"
@@ -69,7 +70,7 @@ class PaypalGatewayTest extends SpecWithJUnit with Mockito {
     val someCaptured = new Capture()
     someCaptured.setId(someCapturedId)
 
-    val validateHelperAuthorizeOrSaleFlow: (Option[String], Unit => Payment) => MatchResult[Payment] = (bnCode, f) => {
+    val validateHelperAuthorizeOrSaleFlow: (Option[String], Unit => com.paypal.api.payments.Payment) => MatchResult[com.paypal.api.payments.Payment] = (bnCode, f) => {
       got {
         one(helper).retrieveAccessToken(someMerchant, bnCode)
         f.apply(Unit)
@@ -104,7 +105,7 @@ class PaypalGatewayTest extends SpecWithJUnit with Mockito {
       helper.submitPayment(someAccessToken, somePayment) returns
         someAuthorizedPayment
 
-      paypalGateway.authorize(someMerchantKey, someCreditCard, someCurrencyAmount) must
+      paypalGateway.authorize(someMerchantKey, someCreditCard, somePaymentLibpay) must
         beASuccessfulTry(check = ===(someAuthorizationKey))
 
       validateHelperAuthorizeOrSaleFlow(None, _ => one(helper)
@@ -121,7 +122,7 @@ class PaypalGatewayTest extends SpecWithJUnit with Mockito {
       helper.submitPayment(someAccessToken, somePayment) returns
         someAuthorizedPayment
 
-      paypalGatewayWithBnCode.authorize(someMerchantKey, someCreditCard, someCurrencyAmount) must
+      paypalGatewayWithBnCode.authorize(someMerchantKey, someCreditCard, somePaymentLibpay) must
         beASuccessfulTry(check = ===(someAuthorizationKey))
 
       validateHelperAuthorizeOrSaleFlow(Some(someBnCode), _ => one(helper)
@@ -176,7 +177,7 @@ class PaypalGatewayTest extends SpecWithJUnit with Mockito {
       helper.submitPayment(someAccessToken, somePayment) returns
         someSoldPayment
 
-      paypalGateway.sale(someMerchantKey, someCreditCard, someCurrencyAmount) must
+      paypalGateway.sale(someMerchantKey, someCreditCard, somePaymentLibpay) must
         beASuccessfulTry(check = ===(someSoldId))
 
       validateHelperAuthorizeOrSaleFlow(None, _ => one(helper)
@@ -193,7 +194,7 @@ class PaypalGatewayTest extends SpecWithJUnit with Mockito {
       helper.submitPayment(someAccessToken, somePayment) returns
         someSoldPayment
 
-      paypalGatewayWithBnCode.sale(someMerchantKey, someCreditCard, someCurrencyAmount) must
+      paypalGatewayWithBnCode.sale(someMerchantKey, someCreditCard, somePaymentLibpay) must
         beASuccessfulTry(check = ===(someSoldId))
 
       validateHelperAuthorizeOrSaleFlow(Some(someBnCode), _ => one(helper)

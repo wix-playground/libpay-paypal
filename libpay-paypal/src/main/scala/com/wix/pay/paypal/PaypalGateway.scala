@@ -4,7 +4,7 @@ package com.wix.pay.paypal
 import com.paypal.api.payments.Transaction
 import com.paypal.base.rest.PayPalRESTException
 import com.wix.pay.creditcard.CreditCard
-import com.wix.pay.model.{CurrencyAmount, Customer, Deal}
+import com.wix.pay.model.{CurrencyAmount, Customer, Deal, Payment}
 import com.wix.pay.{PaymentErrorException, PaymentException, PaymentGateway}
 
 import scala.collection.JavaConversions._
@@ -29,16 +29,18 @@ class PaypalGateway(helper: PaypalGatewayHelper = new DefaultPaypalGatewayHelper
     rejectOnUnknownErrors = rejectOnUnknownErrors
   )
 
-  override def authorize(merchantKey: String, creditCard: CreditCard, currencyAmount: CurrencyAmount, customer: Option[Customer], deal: Option[Deal]): Try[String] = {
+  override def authorize(merchantKey: String, creditCard: CreditCard, payment: Payment, customer: Option[Customer], deal: Option[Deal]): Try[String] = {
     Try {
+      require(payment.installments == 1, "PayPal does not support installments")
+
       val merchant = merchantParser.parse(merchantKey)
       val accessToken = helper.retrieveAccessToken(merchant, bnCode)
 
-      val authorize = helper.createAuthorize(creditCard, currencyAmount)
+      val authorize = helper.createAuthorize(creditCard, payment.currencyAmount)
       val authorized = helper.submitPayment(accessToken, authorize)
 
       val authorizationId = getAuthorizationId(authorized.getTransactions.get(0))
-      authorizationParser.stringify(PaypalAuthorization(authorizationId, currencyAmount.currency))
+      authorizationParser.stringify(PaypalAuthorization(authorizationId, payment.currencyAmount.currency))
     } match {
       case Success(authorizationKey) => Success(authorizationKey)
       case Failure(e: PayPalRESTException) => Failure(exceptionsTranslator.translatePaypalException(e))
@@ -63,12 +65,14 @@ class PaypalGateway(helper: PaypalGatewayHelper = new DefaultPaypalGatewayHelper
     }
   }
 
-  override def sale(merchantKey: String, creditCard: CreditCard, currencyAmount: CurrencyAmount, customer: Option[Customer], deal: Option[Deal]): Try[String] = {
+  override def sale(merchantKey: String, creditCard: CreditCard, payment: Payment, customer: Option[Customer], deal: Option[Deal]): Try[String] = {
     Try {
+      require(payment.installments == 1, "PayPal does not support installments")
+
       val merchant = merchantParser.parse(merchantKey)
       val accessToken = helper.retrieveAccessToken(merchant, bnCode)
 
-      val sale = helper.createSale(creditCard, currencyAmount)
+      val sale = helper.createSale(creditCard, payment.currencyAmount)
       val sold = helper.submitPayment(accessToken, sale)
 
       sold.getId
