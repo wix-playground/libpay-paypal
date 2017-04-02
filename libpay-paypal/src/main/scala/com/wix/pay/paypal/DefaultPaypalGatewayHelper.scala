@@ -10,6 +10,7 @@ import com.paypal.base.rest.{OAuthTokenCredential, PayPalRESTException, PayPalRe
 import com.wix.pay.creditcard.CreditCard
 import com.wix.pay.creditcard.networks.Networks
 import com.wix.pay.model.{CurrencyAmount, Name}
+import com.wix.pay.paypal.iin.IIN
 import com.wix.pay.{PaymentErrorException, PaymentException}
 import org.json4s.DefaultFormats
 import org.json4s.native.Serialization
@@ -158,16 +159,54 @@ class DefaultPaypalGatewayHelper(connectTimeout: Option[Duration] = None,
       ppCard.setLastName(name.last)
     }
 
-    // PayPal requires all address fields to be filled-in if an address is given, which unfortunately we don't have
-    // @see https://developer.paypal.com/docs/api/#address-object
-    /*
-    val address = new Address
-    creditCard.billingAddress foreach address.setLine1
-    creditCard.billingPostalCode foreach address.setPostalCode
-    ppCard.setBillingAddress(address)
-    */
+    toPaypayBillingAddressOpt(
+      addressOpt = creditCard.billingAddress,
+      postalCodeOpt = creditCard.billingPostalCode,
+      iin = creditCard.number.substring(0, 6)
+    ).foreach { ppCard.setBillingAddress }
 
     ppCard
+  }
+
+  /**
+    * @param addressOpt      Free-text address (optional)
+    * @param postalCodeOpt   Postal code (optional)
+    * @param iin             IIN (issuer identification number), first 6 digits of card number
+    * @return Option of PayPay billing address object.
+    * @see <a href="https://developer.paypal.com/docs/api/payments/#definition-address">Common object definitions - address</a>
+    */
+  private def toPaypayBillingAddressOpt(addressOpt: Option[String], postalCodeOpt: Option[String], iin: String): Option[Address] = {
+    // If an address is provided, PayPal requires the following fields: country code, city, postal code, line1.
+    // Unfortunately we don't know the country code and city, so we use placeholders or guess.
+
+    (addressOpt, postalCodeOpt) match {
+      case (Some(billingAddress), Some(postalCode)) =>
+        val address = new Address
+        address.setLine1(billingAddress)
+        address.setCity(DefaultPaypalGatewayHelper.unknownCity)
+        address.setPostalCode(postalCode)
+        address.setCountryCode(IIN.countryCodes.get(iin).getOrElse(DefaultPaypalGatewayHelper.defaultCountryCode))
+        Some(address)
+
+      case (Some(billingAddress), None) =>
+        val address = new Address
+        address.setLine1(billingAddress)
+        address.setCity(DefaultPaypalGatewayHelper.unknownCity)
+        address.setPostalCode(DefaultPaypalGatewayHelper.unknownPostalCode)
+        address.setCountryCode(IIN.countryCodes.get(iin).getOrElse(DefaultPaypalGatewayHelper.defaultCountryCode))
+        Some(address)
+
+      case (None, Some(postalCode)) =>
+        val address = new Address
+        address.setLine1(DefaultPaypalGatewayHelper.unknownLine1)
+        address.setCity(DefaultPaypalGatewayHelper.unknownCity)
+        address.setPostalCode(postalCode)
+        address.setCountryCode(IIN.countryCodes.get(iin).getOrElse(DefaultPaypalGatewayHelper.defaultCountryCode))
+        Some(address)
+
+      case (None, None) =>
+        None
+    }
   }
 
   private def toPaypalCardType(cardType: String): String = {
@@ -188,4 +227,12 @@ class DefaultPaypalGatewayHelper(connectTimeout: Option[Duration] = None,
       case _ => new Name(parts(0), parts.drop(1).mkString(" "))
     }
   }
+}
+
+private object DefaultPaypalGatewayHelper {
+  val unknownLine1 = "-"
+  val unknownCity = "-"
+  val unknownPostalCode = "0"
+
+  val defaultCountryCode = "US"
 }
