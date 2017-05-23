@@ -10,7 +10,7 @@
     <parent>
         <groupId>com.wix.pay</groupId>
         <artifactId>libpay-paypal-parent</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>1.0.0</version>
         <relativePath>../libpay-paypal-parent</relativePath>
     </parent>
 
@@ -43,7 +43,7 @@
         <dependency>
             <groupId>com.wix.pay</groupId>
             <artifactId>libpay-paypal-common</artifactId>
-            <version>1.0.0-SNAPSHOT</version>
+            <version>1.0.0</version>
         </dependency>
         <dependency>
             <groupId>com.wix.hoopoe.http</groupId>
