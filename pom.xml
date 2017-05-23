@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>libpay-paypal-all</artifactId>
-    <version>1.0.0</version>
+    <version>1.1.0-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>libpay PayPal payment gateway adapter</name>
     <description>libpay module for PayPal payment gateway</description>
@@ -11,7 +11,7 @@
     <parent>
         <groupId>com.wix.pay</groupId>
         <artifactId>libpay-paypal-parent</artifactId>
-        <version>1.0.0</version>
+        <version>1.1.0-SNAPSHOT</version>
 		<relativePath>libpay-paypal-parent</relativePath>
     </parent>
 
@@ -20,7 +20,7 @@
         <url>https://github.com/wix/libpay-paypal</url>
         <connection>scm:git:git://github.com/wix/libpay-paypal.git</connection>
         <developerConnection>scm:git:git@github.com:wix/libpay-paypal.git</developerConnection>
-        <tag>1.0.0</tag>
+        <tag>HEAD</tag>
     </scm>
 
 
