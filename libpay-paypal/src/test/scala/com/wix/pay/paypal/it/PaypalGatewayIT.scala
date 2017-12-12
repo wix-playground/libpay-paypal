@@ -1,13 +1,13 @@
 package com.wix.pay.paypal.it
 
 
+import org.specs2.mutable.SpecWithJUnit
+import org.specs2.specification.Scope
 import com.wix.pay.creditcard.{CreditCard, CreditCardOptionalFields, YearMonth}
 import com.wix.pay.model.{CurrencyAmount, Payment}
 import com.wix.pay.paypal._
 import com.wix.pay.paypal.testkit.PaypalDriver
 import com.wix.pay.{PaymentErrorException, PaymentGateway, PaymentRejectedException}
-import org.specs2.mutable.SpecWithJUnit
-import org.specs2.specification.Scope
 
 
 class PaypalGatewayIT extends SpecWithJUnit {
@@ -19,8 +19,8 @@ class PaypalGatewayIT extends SpecWithJUnit {
 
   val someBnCode = "someBnCode"
 
-  val someMerchant = new PaypalMerchant("some client ID", "some secret")
-  val someMerchantKey = merchantParser.stringify(someMerchant)
+  val someMerchant = PaypalMerchant("some client ID", "some secret")
+  val someMerchantKey: String = merchantParser.stringify(someMerchant)
   val someCurrencyAmount = CurrencyAmount("USD", 33.3)
   val somePayment = Payment(someCurrencyAmount, 1)
   val someCreditCard = CreditCard(
@@ -31,23 +31,25 @@ class PaypalGatewayIT extends SpecWithJUnit {
       holderId = Some("some holder id"),
       holderName = Some("some holder name"))))
   val someAccessToken = "someAccessToken"
+  val paypal: PaymentGateway = new PaypalGateway(
+    merchantParser = merchantParser,
+    authorizationParser = authorizationParser,
+    helper = new DefaultPaypalGatewayHelper(endpoint = s"http://localhost:$paypalPort"),
+    bnCode = Some(someBnCode))
+
 
   step {
-    driver.startProbe()
+    driver.start()
   }
+
 
   sequential
 
-  trait Ctx extends Scope {
-    val paypal: PaymentGateway = new PaypalGateway(
-      merchantParser = merchantParser,
-      authorizationParser = authorizationParser,
-      helper = new DefaultPaypalGatewayHelper(endpoint = s"http://localhost:$paypalPort"),
-      bnCode = Some(someBnCode)
-    )
 
-    driver.resetProbe()
+  trait Ctx extends Scope {
+    driver.reset()
   }
+
 
   "sale request via PayPal gateway" should {
     "gracefully fail on invalid merchant key" in new Ctx {
@@ -56,10 +58,7 @@ class PaypalGatewayIT extends SpecWithJUnit {
       paypal.sale(
         merchantKey = someMerchantKey,
         creditCard = someCreditCard,
-        payment = somePayment
-      ) must beAFailedTry(
-        check = beAnInstanceOf[PaymentErrorException]
-      )
+        payment = somePayment) must beAFailedTry(check = beAnInstanceOf[PaymentErrorException])
     }
 
     "successfully yield a transaction ID on valid request" in new Ctx {
@@ -69,56 +68,43 @@ class PaypalGatewayIT extends SpecWithJUnit {
       driver.aSaleRequestFor(
         accessToken = someAccessToken,
         currencyAmount = someCurrencyAmount,
-        card = someCreditCard
-      ) returns someTransactionId
+        card = someCreditCard) returns someTransactionId
 
       paypal.sale(
         merchantKey = someMerchantKey,
         creditCard = someCreditCard,
-        payment = somePayment
-      ) must beASuccessfulTry(
-        check = ===(someTransactionId)
-      )
+        payment = somePayment) must beASuccessfulTry(check = ===(someTransactionId))
     }
 
     "gracefully fail on rejected card" in new Ctx {
       driver.anAuthenticateRequestFor(
-        someMerchant.clientId, someMerchant.secret
-      ) returns someAccessToken
+        someMerchant.clientId, someMerchant.secret) returns someAccessToken
       driver.aSaleRequestFor(
         accessToken = someAccessToken,
         currencyAmount = someCurrencyAmount,
-        card = someCreditCard
-      ) isRefused()
+        card = someCreditCard) getsRefused()
 
       paypal.sale(
         merchantKey = someMerchantKey,
         creditCard = someCreditCard,
-        payment = somePayment
-      ) must beAFailedTry(
-        check = beAnInstanceOf[PaymentRejectedException]
-      )
+        payment = somePayment) must beAFailedTry(check = beAnInstanceOf[PaymentRejectedException])
     }
 
     "gracefully fail on CSC error" in new Ctx {
       driver.anAuthenticateRequestFor(
-        someMerchant.clientId, someMerchant.secret
-      ) returns someAccessToken
+        someMerchant.clientId, someMerchant.secret) returns someAccessToken
       driver.aSaleRequestFor(
         accessToken = someAccessToken,
         currencyAmount = someCurrencyAmount,
-        card = someCreditCard
-      ) failsCscCheck()
+        card = someCreditCard) failsCscCheck()
 
       paypal.sale(
         merchantKey = someMerchantKey,
         creditCard = someCreditCard,
-        payment = somePayment
-      ) must beAFailedTry(
-        check = beAnInstanceOf[PaymentRejectedException]
-      )
+        payment = somePayment) must beAFailedTry(check = beAnInstanceOf[PaymentRejectedException])
     }
   }
+
 
   "authorize request via PayPal gateway" should {
     "gracefully fail on invalid merchant key" in new Ctx {
@@ -127,15 +113,12 @@ class PaypalGatewayIT extends SpecWithJUnit {
       paypal.authorize(
         merchantKey = someMerchantKey,
         creditCard = someCreditCard,
-        payment = somePayment
-      ) must beAFailedTry(
-        check = beAnInstanceOf[PaymentErrorException]
-      )
+        payment = somePayment) must beAFailedTry(check = beAnInstanceOf[PaymentErrorException])
     }
 
     "successfully yield an authorization key on valid request" in new Ctx {
       val someAuthorizationId = "some authorization ID"
-      val someAuthorizationKey = authorizationParser.stringify(
+      val someAuthorizationKey: String = authorizationParser.stringify(
         PaypalAuthorization(someAuthorizationId, someCurrencyAmount.currency))
 
       driver.anAuthenticateRequestFor(someMerchant.clientId, someMerchant.secret) returns someAccessToken
@@ -144,10 +127,7 @@ class PaypalGatewayIT extends SpecWithJUnit {
       paypal.authorize(
         merchantKey = someMerchantKey,
         creditCard = someCreditCard,
-        payment = somePayment
-      ) must beASuccessfulTry(
-        check = ===(someAuthorizationKey)
-      )
+        payment = somePayment) must beASuccessfulTry(check = ===(someAuthorizationKey))
     }
 
     "gracefully fail on rejected card" in new Ctx {
@@ -155,40 +135,31 @@ class PaypalGatewayIT extends SpecWithJUnit {
       driver.anAuthorizeRequestFor(
         accessToken = someAccessToken,
         currencyAmount = someCurrencyAmount,
-        card = someCreditCard
-      ) isRefused()
+        card = someCreditCard) getsRefused()
 
       paypal.authorize(
         merchantKey = someMerchantKey,
         creditCard = someCreditCard,
-        payment = somePayment
-      ) must beAFailedTry(
-        check = beAnInstanceOf[PaymentRejectedException]
-      )
+        payment = somePayment) must beAFailedTry(check = beAnInstanceOf[PaymentRejectedException])
     }
 
     "gracefully fail on CSC error" in new Ctx {
       driver.anAuthenticateRequestFor(
-        someMerchant.clientId, someMerchant.secret
-      ) returns someAccessToken
+        someMerchant.clientId, someMerchant.secret) returns someAccessToken
       driver.anAuthorizeRequestFor(
         accessToken = someAccessToken,
         currencyAmount = someCurrencyAmount,
-        card = someCreditCard
-      ) failsCscCheck()
+        card = someCreditCard) failsCscCheck()
 
       paypal.authorize(
         merchantKey = someMerchantKey,
         creditCard = someCreditCard,
-        payment = somePayment
-      ) must beAFailedTry(
-        check = beAnInstanceOf[PaymentRejectedException]
-      )
+        payment = somePayment) must beAFailedTry(check = beAnInstanceOf[PaymentRejectedException])
     }
   }
 
 
   step {
-    driver.stopProbe()
+    driver.stop()
   }
 }

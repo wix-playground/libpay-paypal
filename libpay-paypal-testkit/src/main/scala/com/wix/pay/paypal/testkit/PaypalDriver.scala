@@ -1,28 +1,25 @@
 package com.wix.pay.paypal.testkit
 
 
-import com.wix.hoopoe.http.testkit.EmbeddedHttpProbe
+import akka.http.scaladsl.model.Uri.Path
+import akka.http.scaladsl.model._
+import com.wix.e2e.http.api.StubWebServer
+import com.wix.e2e.http.server.WebServerFactory.aStubWebServer
 import com.wix.pay.creditcard.CreditCard
 import com.wix.pay.model.CurrencyAmount
 import com.wix.pay.paypal.PaypalHelper
 import com.wix.pay.paypal.model.ErrorNames
-import spray.http._
 
 
 class PaypalDriver(port: Int) {
-  private val probe = new EmbeddedHttpProbe(port, EmbeddedHttpProbe.NotFoundHandler)
+  private val server: StubWebServer = aStubWebServer.onPort(port).build
 
-  def startProbe() {
-    probe.doStart()
-  }
+  def start(): Unit = server.start()
 
-  def stopProbe() {
-    probe.doStop()
-  }
+  def stop(): Unit = server.stop()
 
-  def resetProbe() {
-    probe.handlers.clear()
-  }
+  def reset(): Unit = server.replaceWith()
+
 
   def anAuthenticateRequestFor(clientId: String, secret: String): AuthenticateCtx = {
     new AuthenticateCtx(clientId, secret)
@@ -45,59 +42,66 @@ class PaypalDriver(port: Int) {
     def isStubbedRequestEntity(entity: HttpEntity): Boolean
 
     def errors(statusCode: StatusCode, errorName: String, errorMessage: String): Unit = {
-      probe.handlers += {
+      server.appendAll {
         case HttpRequest(
-        HttpMethods.POST,
-        Uri.Path(`resource`),
-        _,
-        entity,
-        _) if isStubbedRequestEntity(entity) =>
-          HttpResponse(
-            status = statusCode,
-            entity = HttpEntity(ContentTypes.`application/json`,
-              "{\n  \"name\": \"" + errorName + "\",\n  \"message\": \"" + errorMessage + "\"\n}"))
+          HttpMethods.POST,
+          Path(`resource`),
+          _,
+          entity,
+          _) if isStubbedRequestEntity(entity) =>
+            HttpResponse(
+              status = statusCode,
+              entity = HttpEntity(
+                ContentTypes.`application/json`,
+                s"""{
+                   | "name": "$errorName",
+                   | "message": "$errorMessage"
+                   |}""".stripMargin))
       }
     }
 
-    def isRefused(): Unit = {
+    def getsRefused(): Unit = {
       errors(
         statusCode = StatusCodes.BadRequest,
         errorName = ErrorNames.creditCardRefused,
-        errorMessage = "Credit card was refused"
-      )
+        errorMessage = "Credit card was refused")
     }
 
     def failsOnWrongCredentials(): Unit = {
       errors(
         statusCode = StatusCodes.Unauthorized,
         errorName = ErrorNames.invalidClient,
-        errorMessage = "Invalid client credentials"
-      )
+        errorMessage = "Invalid client credentials")
     }
 
     def failsCscCheck(): Unit = {
       errors(
         statusCode = StatusCodes.Unauthorized,
         errorName = ErrorNames.creditCardCvvCheckFailed,
-        errorMessage = "The credit card CVV check failed"
-      )
+        errorMessage = "The credit card CVV check failed")
     }
   }
 
   class AuthenticateCtx(clientId: String, secret: String) extends Ctx("/v1/oauth2/token") {
     def returns(accessToken: String): Unit = {
-      probe.handlers += {
+      server.appendAll {
         case HttpRequest(
-        HttpMethods.POST,
-        Uri.Path(`resource`),
-        _,
-        entity,
-        _) if isStubbedRequestEntity(entity) =>
-          HttpResponse(
-            status = StatusCodes.OK,
-            entity = HttpEntity(
-              ContentTypes.`application/json`,
-              "{\n  \"scope\": \"https://api.paypal.com/v1/payments/.* https://api.paypal.com/v1/vault/credit-card https://api.paypal.com/v1/vault/credit-card/.*\",\n  \"access_token\": \"" + accessToken + "\",\n  \"token_type\": \"Bearer\",\n  \"app_id\": \"APP-6XR95014BA15863X\",\n  \"expires_in\": 28800\n}"))
+          HttpMethods.POST,
+          Path(`resource`),
+          _,
+          entity,
+          _) if isStubbedRequestEntity(entity) =>
+            HttpResponse(
+              status = StatusCodes.OK,
+              entity = HttpEntity(
+                ContentTypes.`application/json`,
+                s"""{
+                   | "scope": "https://api.paypal.com/v1/payments/.* https://api.paypal.com/v1/vault/credit-card https://api.paypal.com/v1/vault/credit-card/.*",
+                   | "access_token": "$accessToken",
+                   | "token_type": "Bearer",
+                   | "app_id": "APP-6XR95014BA15863X",
+                   | "expires_in": 28800
+                   |}""".stripMargin))
       }
     }
 
@@ -107,14 +111,92 @@ class PaypalDriver(port: Int) {
     }
   }
 
-  private def saleOrAuthorizeJson(currencyAmount: CurrencyAmount, transactionId: String, authorizationId: String): String = {
+  private def saleOrAuthorizeJson(currencyAmount: CurrencyAmount,
+                                  transactionId: String,
+                                  authorizationId: String): String = {
     val amountStr = PaypalHelper.toPaypalAmount(currencyAmount.amount)
 
-    "{\n  \"id\": \"" + transactionId + "\",\n  \"create_time\": \"2013-01-31T04:12:02Z\",\n  \"update_time\": \"2013-01-31T04:12:04Z\",\n  \"state\": \"approved\",\n  \"intent\": \"authorize\",\n  \"payer\": {\n    \"payment_method\": \"credit_card\",\n    \"funding_instruments\": [\n      {\n        \"credit_card\": {\n          \"type\": \"visa\",\n          \"number\": \"xxxxxxxxxxxx0331\",\n          \"expire_month\": \"11\",\n          \"expire_year\": \"2018\",\n          \"first_name\": \"Betsy\",\n          \"last_name\": \"Buyer\",\n          \"billing_address\": {\n            \"line1\": \"111 First Street\",\n            \"city\": \"Saratoga\",\n            \"state\": \"CA\",\n            \"postal_code\": \"95070\",\n            \"country_code\": \"US\"\n          }\n        }\n      }\n    ]\n  },\n  \"transactions\": [\n    {\n      \"amount\": {\n        \"total\": \"" +
-      amountStr + "\",\n        \"currency\": \"" +
-      currencyAmount.currency + "\",\n        \"details\": {\n          \"tax\": \"0.00\",\n          \"shipping\": \"0.00\"\n        }\n      },\n      \"description\": \"This is the payment transaction description.\",\n      \"related_resources\": [\n        {\n          \"authorization\": {\n            \"id\": \"" +
-      authorizationId + "\",\n            \"create_time\": \"2013-01-31T04:12:02Z\",\n            \"update_time\": \"2013-01-31T04:12:04Z\",\n            \"state\": \"completed\",\n            \"amount\": {\n              \"total\": \"" +
-      amountStr + "\",\n              \"currency\": \"" + currencyAmount.currency + "\"\n            },\n            \"parent_payment\": \"" + transactionId + "\",\n            \"links\": [\n              {\n                \"href\": \"https://api.sandbox.paypal.com/v1/payments/sale/4RR959492F879224U\",\n                \"rel\": \"self\",\n                \"method\": \"GET\"\n              },\n              {\n                \"href\": \"https://api.sandbox.paypal.com/v1/payments/sale/4RR959492F879224U/refund\",\n                \"rel\": \"refund\",\n                \"method\": \"POST\"\n              },\n              {\n                \"href\": \"https://api.sandbox.paypal.com/v1/payments/payment/" + transactionId + "\",\n                \"rel\": \"parent_payment\",\n                \"method\": \"GET\"\n              }\n            ]\n          }\n        }\n      ]\n    }\n  ],\n  \"links\": [\n    {\n      \"href\": \"https://api.sandbox.paypal.com/v1/payments/payment/" + transactionId + "\",\n      \"rel\": \"self\",\n      \"method\": \"GET\"\n    }\n  ]\n}"
+    s"""{
+       |  "id": "$transactionId",
+       |  "create_time": "2013-01-31T04:12:02Z",
+       |  "update_time": "2013-01-31T04:12:04Z",
+       |  "state": "approved",
+       |  "intent": "authorize",
+       |  "payer": {
+       |    "payment_method": "credit_card",
+       |    "funding_instruments": [
+       |      {
+       |        "credit_card": {
+       |          "type": "visa",
+       |          "number": "xxxxxxxxxxxx0331",
+       |          "expire_month": "11",
+       |          "expire_year": "2018",
+       |          "first_name": "Betsy",
+       |          "last_name": "Buyer",
+       |          "billing_address": {
+       |            "line1": "111 First Street",
+       |            "city": "Saratoga",
+       |            "state": "CA",
+       |            "postal_code": "95070",
+       |            "country_code": "US"
+       |          }
+       |        }
+       |      }
+       |    ]
+       |  },
+       |  "transactions": [
+       |    {
+       |      "amount": {
+       |        "total": "$amountStr",
+       |        "currency": "${currencyAmount.currency}",
+       |        "details": {
+       |          "tax": "0.00",
+       |          "shipping": "0.00"
+       |        }
+       |      },
+       |      "description": "This is the payment transaction description.",
+       |      "related_resources": [
+       |        {
+       |          "authorization": {
+       |            "id": "$authorizationId",
+       |            "create_time": "2013-01-31T04:12:02Z",
+       |            "update_time": "2013-01-31T04:12:04Z",
+       |            "state": "completed",
+       |            "amount": {
+       |              "total": "$amountStr",
+       |              "currency": "${currencyAmount.currency}"
+       |            },
+       |            "parent_payment": "$transactionId",
+       |            "links": [
+       |              {
+       |                "href": "https://api.sandbox.paypal.com/v1/payments/sale/4RR959492F879224U",
+       |                "rel": "self",
+       |                "method": "GET"
+       |              },
+       |              {
+       |                "href": "https://api.sandbox.paypal.com/v1/payments/sale/4RR959492F879224U/refund",
+       |                "rel": "refund",
+       |                "method": "POST"
+       |              },
+       |              {
+       |                "href": "https://api.sandbox.paypal.com/v1/payments/payment/$transactionId",
+       |                "rel": "parent_payment",
+       |                "method": "GET"
+       |              }
+       |            ]
+       |          }
+       |        }
+       |      ]
+       |    }
+       |  ],
+       |  "links": [
+       |    {
+       |      "href": "https://api.sandbox.paypal.com/v1/payments/payment/$transactionId",
+       |      "rel": "self",
+       |      "method": "GET"
+       |    }
+       |  ]
+       |}""".stripMargin
   }
 
   class SaleCtx(accessToken: String,
@@ -122,16 +204,18 @@ class PaypalDriver(port: Int) {
                 card: CreditCard) extends Ctx("/v1/payments/payment") {
 
     def returns(transactionId: String): Unit = {
-      probe.handlers += {
+      server.appendAll {
         case HttpRequest(
-        HttpMethods.POST,
-        Uri.Path(`resource`),
-        _,
-        entity,
-        _) if isStubbedRequestEntity(entity) =>
-          HttpResponse(
-            status = StatusCodes.OK,
-            entity = HttpEntity(ContentTypes.`application/json`, saleOrAuthorizeJson(currencyAmount, transactionId, "xxx")))
+          HttpMethods.POST,
+          Path(`resource`),
+          _,
+          entity,
+          _) if isStubbedRequestEntity(entity) =>
+            HttpResponse(
+              status = StatusCodes.OK,
+              entity = HttpEntity(
+                ContentTypes.`application/json`,
+                saleOrAuthorizeJson(currencyAmount, transactionId, "xxx")))
       }
     }
 
@@ -147,16 +231,19 @@ class PaypalDriver(port: Int) {
 
     def returns(authorizationId: String): Unit = {
       val amountStr = PaypalHelper.toPaypalAmount(currencyAmount.amount)
-      probe.handlers += {
+
+      server.appendAll {
         case HttpRequest(
-        HttpMethods.POST,
-        Uri.Path(`resource`),
-        _,
-        entity,
-        _) if isStubbedRequestEntity(entity) =>
-          HttpResponse(
-            status = StatusCodes.OK,
-            entity = HttpEntity(ContentTypes.`application/json`, saleOrAuthorizeJson(currencyAmount, "xxx", authorizationId)))
+          HttpMethods.POST,
+          Path(`resource`),
+          _,
+          entity,
+          _) if isStubbedRequestEntity(entity) =>
+            HttpResponse(
+              status = StatusCodes.OK,
+              entity = HttpEntity(
+                ContentTypes.`application/json`,
+                saleOrAuthorizeJson(currencyAmount, "xxx", authorizationId)))
       }
     }
 
